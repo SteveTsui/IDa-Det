@@ -13,7 +13,9 @@ Our code is heavily borrowed from DeFeat (https://github.com/ggjy/DeFeat.pytorch
 - This repo uses: `mmdet-v2.0` `mmcv-0.5.6` `cuda 10.1`
 
 ### VOC Results
+
 Pretrained model is here: [GoogleDrive](https://drive.google.com/drive/folders/1I0RlAiLe-KJuorXq4lLzeSgJUb3inT2J?usp=sharing)
+
 **Notes:**
 
 - Faster RCNN based model

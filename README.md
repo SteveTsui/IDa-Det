@@ -1,5 +1,5 @@
 # IDa-Det: An Information Discrepancy-aware Distillation for 1-bit Detectors
-Implementation of our ECCV2022 paper.
+Pytorch implementation of our paper ["IDa-Det: An Information Discrepancy-aware Distillation for 1-bit Detectors"](http://arxiv.org/abs/2210.03477) accepted by ECCV2022.
 
 ### Tips
 Any problem, please contact the first author (Email: shengxu@buaa.edu.cn). 
@@ -26,5 +26,15 @@ Pretrained model is here: [GoogleDrive](https://drive.google.com/drive/folders/1
 | R101  |  4x2  | 0.01    | 81.9  |[GoogleDrive](https://drive.google.com/drive/folders/1I0RlAiLe-KJuorXq4lLzeSgJUb3inT2J?usp=sharing) |     |
 | R101-BiR18| 4x1  | 0.004    | 76.9 | [GoogleDrive](https://drive.google.com/drive/folders/1I0RlAiLe-KJuorXq4lLzeSgJUb3inT2J?usp=sharing)|   |
 
+If you find this work useful in your research, please consider to cite:
+
+```
+@article{xu2022ida,
+  title={IDa-Det: An Information Discrepancy-aware Distillation for 1-bit Detectors},
+  author={Xu, Sheng and Li, Yanjing and Zeng, Bohan and Ma, Teli and Zhang, Baochang and Cao, Xianbin and Gao, Peng and Lu, Jinhu},
+  journal={arXiv preprint arXiv:2210.03477},
+  year={2022}
+}
+```
 
 Other models will be open-sourced successively.

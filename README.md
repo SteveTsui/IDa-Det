@@ -29,11 +29,13 @@ Pretrained model is here: [GoogleDrive](https://drive.google.com/drive/folders/1
 If you find this work useful in your research, please consider to cite:
 
 ```
-@article{xu2022ida,
-  title={IDa-Det: An Information Discrepancy-aware Distillation for 1-bit Detectors},
-  author={Xu, Sheng and Li, Yanjing and Zeng, Bohan and Ma, Teli and Zhang, Baochang and Cao, Xianbin and Gao, Peng and Lu, Jinhu},
-  journal={arXiv preprint arXiv:2210.03477},
-  year={2022}
+@inproceedings{xu2022ida,
+  title={IDa-Det: An Information Discrepancy-Aware Distillation for 1-Bit Detectors},
+  author={Xu, Sheng and Li, Yanjing and Zeng, Bohan and Ma, Teli and Zhang, Baochang and Cao, Xianbin and Gao, Peng and L{\"u}, Jinhu},
+  booktitle={European Conference on Computer Vision},
+  pages={346--361},
+  year={2022},
+  organization={Springer}
 }
 ```
 

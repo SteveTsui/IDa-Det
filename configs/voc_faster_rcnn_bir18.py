@@ -1,6 +1,6 @@
 model = dict(
     type='FasterRCNNKD',
-    pretrained='/home/zla/zbh/code/DeFeat.pytorch-main/tmp/ImageNet-pretrained/resnet18_mcn_65_30.pth',
+    pretrained='path_to/bires18.pth',
     hint_adapt=dict(
         type='neck-adapt, mask-neck-roi, entro-back, entro_beta',
         neck_in_channels=[256,256,256,256,256],

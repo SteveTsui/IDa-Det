@@ -93,12 +93,12 @@ class BiConv(_ConvNd):
             in_channels, out_channels, kernel_size, stride, padding, dilation,
             False, _pair(0), groups, bias,padding_mode='zeros')
 
-        self.generate_MFilters(kernel_size)
+        self.generate_scale()
         self.binarization = Binarization.apply
         self.binfunc = BinaryActivation()
         self.out_channels = out_channels
         
-    def generate_scale(self, kernel_size):
+    def generate_scale(self):
         self.scale = Parameter(torch.randn(self.out_channels, 1, 1, 1))
 
     def forward(self, x):

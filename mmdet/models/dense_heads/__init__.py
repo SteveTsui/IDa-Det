@@ -16,7 +16,7 @@ from .rpn_head_react import RPNHead_React
 from .ssd_head import SSDHead
 
 __all__ = [
-    'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption', 'RPNHead', 'RPNHead_React', 'RPNHead_React_v2', 'RPNHead_React_v3',
+    'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption', 'RPNHead', 'RPNHead_React',
     'GARPNHead', 'RetinaHead', 'RetinaSepBNHead', 'GARetinaHead', 'SSDHead',
     'FCOSHead', 'RepPointsHead', 'FoveaHead', 'FreeAnchorRetinaHead',
     'ATSSHead', 'FSAFHead'

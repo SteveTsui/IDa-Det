@@ -12,6 +12,12 @@ Our code is heavily borrowed from DeFeat (https://github.com/ggjy/DeFeat.pytorch
 - MMDetection 2.x
 - This repo uses: `mmdet-v2.0` `mmcv-0.5.6` `cuda 10.1`
 
+### Get Started
+- sh script.sh
+
+### Update
+We simplify and optimize the code. Now IDa-Det is successtully plugged in the original DeFeat project. The training cost is reduced by about **30%** compared with the old version.
+
 ### VOC Results
 
 Pretrained model is here: [GoogleDrive](https://drive.google.com/drive/folders/1I0RlAiLe-KJuorXq4lLzeSgJUb3inT2J?usp=sharing)

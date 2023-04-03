@@ -16,7 +16,7 @@ Our code is heavily borrowed from DeFeat (https://github.com/ggjy/DeFeat.pytorch
 - sh script.sh
 
 ### Update
-We simplify and optimize the code. Now IDa-Det is successtully plugged in the original DeFeat project. The training cost is reduced by about **30%** compared with the old version.
+We simplify and optimize the code. Now IDa-Det is successfully plugged in the original DeFeat project. The training cost is reduced by about **30%** compared with the old version.
 
 ### VOC Results
 

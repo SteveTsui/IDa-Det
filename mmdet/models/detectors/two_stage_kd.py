@@ -1,3 +1,4 @@
+from turtle import pd
 import torch
 import torch.nn as nn
 
@@ -6,6 +7,23 @@ from .base import BaseDetector
 from .test_mixins import RPNTestMixin
 from mmdet.ops import nms
 from mmdet.ops import roi_align
+
+class entropy_loss(nn.Module):
+    def __init__(self, channel_size, init_num=2):
+        super(entropy_loss, self).__init__()
+        self.sigma = nn.Parameter(self.init_sigma(init_num))
+
+    def init_sigma(self, init_num):
+        sigma_w = torch.FloatTensor(torch.full(size=(1, 1, 1, 1), fill_value=init_num))
+        return sigma_w
+
+    def forward(self, teacher_fm, student_fm, mask):
+        norm = max(1.0, mask.sum())
+        mse = torch.pow(teacher_fm - student_fm, 2) * mask 
+        corre = torch.pow(self.sigma, -2) * torch.pow(teacher_fm - student_fm, 2) * mask 
+        det = torch.log(torch.pow(self.sigma, 2))
+        return (mse + corre + 1e-3 * det).sum() / norm
+
 
 @DETECTORS.register_module()
 class TwoStageDetectorKD(BaseDetector, RPNTestMixin):
@@ -47,6 +65,8 @@ class TwoStageDetectorKD(BaseDetector, RPNTestMixin):
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
+        if 'entropy-loss' in hint_adapt.type:
+            self.entropy_loss = entropy_loss(256, 1.000001)
 
         if 'neck-adapt' in hint_adapt.type:
             self.neck_adapt = []
@@ -75,7 +95,7 @@ class TwoStageDetectorKD(BaseDetector, RPNTestMixin):
             self.bb_adapt = nn.ModuleList(self.bb_adapt)
 
         self.init_weights(pretrained=pretrained)
-
+        self.feature_p2 = {}
     @property
     def with_rpn(self):
         return hasattr(self, 'rpn_head') and self.rpn_head is not None
@@ -193,6 +213,7 @@ class TwoStageDetectorKD(BaseDetector, RPNTestMixin):
                 # FGFI
                 # RoI \phi=0.5
                 phi = kd_cfg.get('roi_phi', 0.5)
+                # import pdb;pdb.set_trace()
                 neck_mask_batch = self.rpn_head.get_roi_mask(rpn_outs[0], img_metas, gt_bboxes, phi=phi)
 
             if 'mask-bb-one' in kd_cfg.type:
@@ -229,13 +250,16 @@ class TwoStageDetectorKD(BaseDetector, RPNTestMixin):
         head_det['gt_bboxes'] = gt_bboxes
         head_det['gt_labels'] = gt_labels
         head_det['proposal_list'] = proposal_list
+
+        # import pdb;pdb.set_trace()
         
         # print(sampling_results[0].size()) # len(sampling_results)=2
 
         mask = dict()
         mask['neck_mask_batch'] = neck_mask_batch
         mask['bb_mask_batch'] = bb_mask_batch
-
+        
+        # import pdb;pdb.set_trace()
         return losses, head_det, mask, rpn_outs, rpn_targets
 
     async def async_simple_test(self,
@@ -246,7 +270,7 @@ class TwoStageDetectorKD(BaseDetector, RPNTestMixin):
         """Async test without augmentation."""
         assert self.with_bbox, 'Bbox head must be implemented.'
         x, _ = self.extract_feat(img)
-
+        # import pdb;pdb.set_trace()
         if proposals is None:
             proposal_list = await self.async_test_rpn(x, img_meta)
         else:
@@ -260,6 +284,7 @@ class TwoStageDetectorKD(BaseDetector, RPNTestMixin):
         assert self.with_bbox, 'Bbox head must be implemented.'
 
         x, _ = self.extract_feat(img)
+        # import pdb;pdb.set_trace()
 
         if proposals is None:
             proposal_list = self.simple_test_rpn(x, img_metas)

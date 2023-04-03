@@ -4,6 +4,7 @@
 #matplotlib.use('Agg')
 import random
 from collections import OrderedDict
+from turtle import pd
 
 import numpy as np
 import torch
@@ -39,7 +40,8 @@ def set_random_seed(seed, deterministic=False):
 
 def parse_losses(losses):
     log_vars = OrderedDict()
-    for loss_name, loss_value in losses.items():
+    a = losses.items()
+    for loss_name, loss_value in a:
         if isinstance(loss_value, torch.Tensor):
             log_vars[loss_name] = loss_value.mean()
         elif isinstance(loss_value, list):
@@ -49,11 +51,15 @@ def parse_losses(losses):
 
     loss = sum(_value for _key, _value in log_vars.items() if 'loss' in _key)
 
+    #loss = 4 * sum(_value for _key, _value in log_vars.items() if 'loss' in _key)
+
     log_vars['loss'] = loss
     for loss_name, loss_value in log_vars.items():
         # reduce loss when distributed training
         if dist.is_available() and dist.is_initialized():
             loss_value = loss_value.data.clone()
+    #        if loss_name != 'acc':
+    #            loss_value = 4 * loss_value
             dist.all_reduce(loss_value.div_(dist.get_world_size()))
         log_vars[loss_name] = loss_value.item()
 
@@ -143,6 +149,57 @@ def mseloss(pred_s, pred_t, target, weights):
         loss = F.mse_loss(pred_s, pred_t, reduction='none')
         return loss.sum(), loss.size(0)
 
+def ida_mask(img_metas, rois_target, feat_t, feat_s):
+    bs = feat_s.size(0)
+    c = feat_s.size(1)
+    h = feat_s.size(2)
+    w = feat_s.size(3)
+
+    mask = torch.zeros(bs, feat_t.shape[2], feat_t.shape[3]).cuda()
+
+    for b in range(bs):
+
+
+        h_img = img_metas[b]['img_shape'][1] 
+        w_img =  img_metas[b]['img_shape'][0] 
+
+        coords = torch.zeros_like(rois_target[b])
+        distance = torch.zeros(rois_target[b].shape[0]).cuda()
+
+        coords[:, 0] = (rois_target[b][:, 0] / h_img * h).round()
+        coords[:, 2] = (rois_target[b][:, 2] / h_img * h).round()
+
+
+        coords[:, 1] = (rois_target[b][:, 1] / w_img * w).round()
+        coords[:, 3] = (rois_target[b][:, 3] / w_img * w).round()
+
+        for i in range(rois_target[b].shape[0]):
+            x1 = int(coords[i, 0])
+            x2 = int(coords[i, 2])
+
+            y1 = int(coords[i, 1])
+            y2 = int(coords[i, 3])
+
+            ph = x2 - x1
+
+            pw = y2 - y1
+        
+            if (ph > 1) and (pw > 1):
+                patched_t = feat_t[b, :, x1:x2, y1:y2].detach().reshape(c, ph * pw).softmax(dim=1) #.reshape(c, ph, pw) 
+                patched_s = feat_s[b, :, x1:x2, y1:y2].detach().reshape(c, ph * pw).softmax(dim=1) #.reshape(c, ph, pw)
+                d_t = torch.pow(patched_t.mean(1), 2) / patched_t.var(1)
+                d_s = torch.pow(patched_s.mean(1), 2) / patched_s.var(1)
+                distance[i] = (d_t - d_s).abs().sum() / ph * pw
+
+        __, ranking = distance.sort()
+        selected_idx = ranking[-int(round(0.6 * rois_target[b].size(0))):]
+        selected_coords = coords[selected_idx, :]
+
+        for k in range(selected_idx.numel()):
+            mask[b, int(selected_coords[k, 0]): int(selected_coords[k, 2])] = 1
+            mask[b, int(selected_coords[k, 1]): int(selected_coords[k, 3])] = 1
+
+    return mask
 
 def batch_processor_kd(model, model_t, data, train_mode, kd_warm=dict(), kd_decay=1., epoch=0, **kwargs):
     
@@ -209,6 +266,8 @@ def batch_processor_kd(model, model_t, data, train_mode, kd_warm=dict(), kd_deca
         neck_feat = head_det_s['neck']
         bb_feat = head_det_s['backbone']
         bbox_target_gt = head_det_s['bbox_targets'] 
+        proposal_list_s = head_det_s['proposal_list']
+
 
         if model_t is not None:
             # model_t return: losses, head_det, mask, rpn_outs, rpn_targets
@@ -218,12 +277,15 @@ def batch_processor_kd(model, model_t, data, train_mode, kd_warm=dict(), kd_deca
             bb_feat_t = head_det_t['backbone']
             sampling_results = head_det_t['sampling']
             cls_score_t = head_det_t['cls_score']
+            img_metas = head_det_t['img_metas']
+            proposal_list_t = head_det_t['proposal_list']
 
             if hasattr(model.module, 'roi_head'):
                 _, cls_score_s, bbox_pred_s, _, _ = model.module.roi_head.forward_train(
                     head_det_s['neck'], head_det_s['img_metas'], None, 
                     head_det_s['gt_bboxes'], head_det_s['gt_labels'], None, None, 
                     sampling=sampling_results, cls_neg_weight=cls_neg_weight) 
+    
 
     if 'head-cls' in kd_cfg.type:
         labels = bbox_target_gt[0]  # size 2048
@@ -303,10 +365,36 @@ def batch_processor_kd(model, model_t, data, train_mode, kd_warm=dict(), kd_deca
             loss_dist_neck = torch.Tensor([0]).cuda()
         if 'neck-decouple' in kd_cfg.type:
             losskd_neck_back = torch.Tensor([0]).cuda()
+        if 'mask-neck-ida' in kd_cfg.type:
+            from mmdet.ops import nms
+            rois_target = []
+            with torch.no_grad():
+                for _ in range(len(proposal_list_s)):
+                    proposals_s = proposal_list_s[_]
+                    proposals_t = proposal_list_t[_]
+                    
+                    proposals_s = proposals_s[(proposals_s[:, -1] > 0.85)]
+                    proposals_t = proposals_t[(proposals_t[:, -1] > 0.85)]
+                    rois_s, _ = nms(proposals_s, 0.1)
+                    rois_t, _ = nms(proposals_t, 0.1)
+                    
+                    rois_target.append(torch.cat((rois_t, rois_s), dim=0))
         for i, _neck_feat in enumerate(neck_feat):
-            mask_hint = neck_mask_batch[i]
-            mask_hint = mask_hint.unsqueeze(1).repeat(1, _neck_feat.size(1), 1, 1)
+            if 'mask-neck-roi' in kd_cfg.type:
+                mask_hint = neck_mask_batch[i]
+                mask_hint = mask_hint.unsqueeze(1).repeat(1, _neck_feat.size(1), 1, 1)
+            elif 'mask-neck-ida' in kd_cfg.type:
+                with torch.no_grad():
+                    f_t = torch.zeros_like(neck_feat_t[i]).cuda()
+                    f_t.copy_(neck_feat_t[i].data)
+                    f_t.detach()
+                    f_s = torch.zeros_like(_neck_feat).cuda()
+                    f_s.copy_(_neck_feat.data)
+                    f_s.detach()
+                    mask_hint = ida_mask(img_metas, rois_target, f_t, f_s)
+                    mask_hint = mask_hint.unsqueeze(1).repeat(1, _neck_feat.size(1), 1, 1)
             norms = max(1.0, mask_hint.sum() * 2)
+
             if 'neck-adapt' in kd_cfg.type and hasattr(model.module, 'neck_adapt'):
                 neck_feat_adapt = model.module.neck_adapt[i](_neck_feat)
             else:
@@ -324,6 +412,14 @@ def batch_processor_kd(model, model_t, data, train_mode, kd_warm=dict(), kd_deca
                     losskd_neck_back += (torch.pow(neck_feat_adapt - neck_feat_t[i], 2) * 
                                         (1 - mask_hint)).sum() / norms_back
                     losskd_neck += (torch.pow(neck_feat_adapt - neck_feat_t[i], 2) * mask_hint).sum() / norms
+                elif 'cosine' in kd_cfg.type:
+                    similarity = torch.cosine_similarity(neck_feat_adapt, neck_feat_t[i], dim=0).mean()
+                    losskd_neck = losskd_neck + 1 - similarity
+                elif 'inner-production' in kd_cfg.type:
+                    similarity = neck_feat_adapt.mul(neck_feat_t[i]).mean()
+                    losskd_neck = losskd_neck + torch.abs(0.01 / similarity)
+                elif 'entropy-loss' in kd_cfg.type:
+                    losskd_neck = losskd_neck + model.module.entropy_loss(neck_feat_t[i], neck_feat_adapt, mask_hint)
                 else:
                     losskd_neck = losskd_neck + (torch.pow(neck_feat_adapt - neck_feat_t[i], 2) * 
                                                  mask_hint).sum() / norms
@@ -415,7 +511,8 @@ def train_detector(model,
 
     # put model on gpus
     if distributed:
-        find_unused_parameters = cfg.get('find_unused_parameters', False)
+#         find_unused_parameters = cfg.get('find_unused_parameters', False)
+        find_unused_parameters = cfg.get('find_unused_parameters', True)
         # Sets the `find_unused_parameters` parameter in
         # torch.nn.parallel.DistributedDataParallel
         model = MMDistributedDataParallel(
@@ -567,4 +664,5 @@ def train_detector_kd(model,
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
+
     runner.run(data_loaders, cfg.workflow, cfg.total_epochs, kd_cfg=cfg.model.hint_adapt)
